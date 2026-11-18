@@ -5,91 +5,242 @@ import { walkthroughs, getWalkthrough } from "./content/walkthroughs.js";
 import { sims, getSim } from "./sims/index.js";
 import { heroDemo } from "./hero.js";
 import { mountWidgets } from "./widgets/index.js";
+import { icon } from "./icons.js";
+import { scrollToEl } from "./smooth-scroll.js";
 
 // Dashed box marking a spot where content still needs to be written.
+// It only shows when the site runs on your own computer, never on the live site.
+const DEV = ["localhost", "127.0.0.1", ""].includes(location.hostname);
 const placeholder = (title, hint) =>
-  `<div class="placeholder"><strong>✏️ ${title}</strong>${hint}</div>`;
+  DEV ? `<div class="placeholder"><strong>✏️ ${title}</strong>${hint}</div>` : "";
+
+// Equations are written in LaTeX and typeset by KaTeX after the page renders.
+const eqBox = (e) => `<div class="eq"><div class="eq-math" data-lenis-prevent>\\(${e.eq}\\)</div><small>${e.note}</small></div>`;
 
 const simCard = (s) => `
   <a class="card" href="#/simulations/${s.id}">
-    <div class="card-top"><span class="icon">${s.icon}</span></div>
+    <div class="card-top"><span class="module-num">Simulation</span></div>
     <h3>${s.title}</h3><p>${s.summary}</p></a>`;
 
 const walkCard = (w) => `
   <a class="card" href="#/walkthroughs/${w.id}">
-    <div class="card-top"><span class="chip chip-neutral">${getTopic(w.topic)?.title ?? ""}</span><span class="muted" style="font-size:.85rem">${w.difficulty}</span></div>
+    <div class="card-top"><span class="chip chip-neutral">${getTopic(w.topic)?.title ?? ""}</span><span class="muted small">${w.difficulty}</span></div>
     <h3>${w.title}</h3>
     <p>${w.statement.replace(/<[^>]+>/g, "").slice(0, 110)}…</p>
   </a>`;
 
+// The four-step way to use a module. Shown once, on the home page.
+const STEPS = [
+  ["compass", "Start with the overview", "Each module opens with what the unit covers and what you should be able to do by the end."],
+  ["pencil", "Try the examples first", "Work each worked example yourself before you open the solution."],
+  ["sliders", "Test your intuition", "Use the interactive models: change a variable and predict what happens before you watch."],
+  ["check", "Finish with practice", "End each module with the practice problems, then check your answers with the answer checker."],
+];
+
+// One small, static picture of the site's own interface for each step (shown by "How it works").
+const STEP_VISUALS = [
+  `<div class="mock">
+     <div class="eyebrow">Module 3 · Lesson 1 of 8</div>
+     <div class="mock-title">Overview: what Unit 3 covers</div>
+     <div class="mock-label">By the end, you should be able to</div>
+     <ul class="checklist">
+       <li>Split a 2D motion into independent x and y parts</li>
+       <li>Find the range and flight time of a projectile</li>
+       <li>Describe circular motion with a<sub>rad</sub> = v²/R</li>
+     </ul>
+   </div>`,
+  `<div class="mock">
+     <div class="example">
+       <div class="example-label">Worked example</div>
+       <p>A ball is thrown at 20 m/s, 30° above level ground. How far does it land?</p>
+       <div class="mock-reveal">▸ Show solution</div>
+     </div>
+   </div>`,
+  `<div class="mock">
+     <div class="widget mock-widget">
+       <div class="widget-head">${icon("sliders", "widget-ico")}<strong>Projectile</strong><span class="widget-tag">Interactive</span></div>
+       <div class="mock-stage">
+         <svg viewBox="0 0 320 130" role="img" aria-label="A projectile launched at 30, 45 and 60 degrees; 45 degrees lands farthest" data-mock="projectile">
+           <line x1="10" y1="118" x2="310" y2="118" class="mk-ground"/>
+           <path d="M10 118 Q 140 -12 270 118" class="mk-ghost"/>
+           <path d="M10 118 Q 122.7 -77.2 235.3 118" class="mk-ghost"/>
+           <path d="M10 118 Q 122.7 53 235.3 118" class="mk-arc"/>
+           <circle cx="122.7" cy="85.5" r="6" class="mk-ball"/>
+           <text x="235.3" y="108" class="mk-range" text-anchor="middle"></text>
+         </svg>
+       </div>
+       <div class="control mock-control"><label>Angle θ <span>30 °</span></label><div class="mock-range"><span style="width:33%"></span></div></div>
+     </div>
+   </div>`,
+  `<div class="mock">
+     <div class="example">
+       <div class="example-label">Practice problem 4</div>
+       <p>Same ball, now thrown at 60°. Where does it land?</p>
+       <div class="answer-check"><span class="mock-input">35.3</span> m <span class="good">✓ Correct: the same range as 30°.</span></div>
+     </div>
+   </div>`,
+];
+
+// The "Test your intuition" picture plays like the real model: the angle steps through 30°, 45°
+// and 60°, the slider follows, and the ball flies each arc to scale (20 m/s; 260 px = 40.8 m).
+// It runs only while on screen, and stands still for visitors who ask for reduced motion.
+function animateProjectileMock(root) {
+  const svg = root.querySelector('[data-mock="projectile"]');
+  if (!svg || matchMedia("(prefers-reduced-motion: reduce)").matches) return () => {};
+  const arc = svg.querySelector(".mk-arc"), ball = svg.querySelector(".mk-ball"), label = svg.querySelector(".mk-range");
+  const widget = svg.closest(".mock-widget");
+  const fill = widget.querySelector(".mock-range span"), readout = widget.querySelector(".mock-control label span");
+  const g = 9.8, v0 = 20, px = 260 / 40.8;
+  const X = (x) => 10 + x * px, Y = (y) => 118 - y * px;
+  const angles = [30, 45, 60];
+  let i = 0, t = 0, hold = 0, last = 0, raf = 0, visible = false;
+
+  const shot = (deg) => {
+    const th = (deg * Math.PI) / 180;
+    const vx = v0 * Math.cos(th), vy = v0 * Math.sin(th);
+    return { deg, vx, vy, tf: (2 * vy) / g };
+  };
+  let cur = shot(angles[0]);
+  const setAngle = (deg) => {
+    readout.textContent = `${deg} °`;
+    fill.style.width = `${(deg / 90) * 100}%`;
+    label.textContent = "";
+  };
+  setAngle(cur.deg);
+
+  const frame = (now) => {
+    const dt = Math.min(0.05, (now - (last || now)) / 1000);
+    last = now;
+    if (hold > 0) {
+      hold -= dt;
+      if (hold <= 0) { i = (i + 1) % angles.length; cur = shot(angles[i]); t = 0; setAngle(cur.deg); }
+    } else {
+      t = Math.min(cur.tf, t + dt * 1.5);
+      let d = "";
+      for (let j = 0; j <= 40; j++) {
+        const tt = (t * j) / 40;
+        d += `${j ? "L" : "M"}${X(cur.vx * tt).toFixed(1)} ${Y(cur.vy * tt - 0.5 * g * tt * tt).toFixed(1)}`;
+      }
+      arc.setAttribute("d", d);
+      ball.setAttribute("cx", X(cur.vx * t).toFixed(1));
+      ball.setAttribute("cy", Y(cur.vy * t - 0.5 * g * t * t).toFixed(1));
+      if (t >= cur.tf) {
+        const range = cur.vx * cur.tf;
+        label.setAttribute("x", X(range).toFixed(1));
+        label.textContent = `${range.toFixed(1)} m`;
+        hold = 1.1; // show where it landed, then the next angle
+      }
+    }
+    raf = visible ? requestAnimationFrame(frame) : 0;
+  };
+  const io = new IntersectionObserver(([e]) => {
+    visible = e.isIntersecting;
+    if (visible && !raf) { last = 0; raf = requestAnimationFrame(frame); }
+  });
+  io.observe(svg);
+  return () => { io.disconnect(); cancelAnimationFrame(raf); visible = false; };
+}
+
+// ---------------- Course map (home page) ----------------
+// How the modules build on each other: motion, then forces, then three branches (energy,
+// momentum, rotation) that meet again in oscillations. Drawn by the taste-skill diagram builder;
+// each box links to its module (see js/fx-bridge.js). Positions are fractions of the box.
+const MAP = [
+  // [topic id, short label, [x, y]]
+  ["units-vectors", "Units & vectors", [0.08, 0.2]],
+  ["motion-1d", "Straight-line motion", [0.08, 0.5]],
+  ["kinematics", "Motion in 2D", [0.08, 0.8]],
+  ["newtons-laws", "Newton's laws", [0.29, 0.8]],
+  ["applying-newton", "Applying Newton", [0.29, 0.5]],
+  ["work-energy", "Work & energy", [0.52, 0.16]],
+  ["energy-conservation", "Energy conservation", [0.75, 0.16]],
+  ["momentum", "Momentum", [0.52, 0.5]],
+  ["rotation", "Rotation", [0.48, 0.84]],
+  ["rotational-dynamics", "Rotational dynamics", [0.69, 0.84]],
+  ["equilibrium", "Equilibrium", [0.91, 0.84]],
+  ["periodic-motion", "Periodic motion", [0.91, 0.46]],
+];
+const MAP_EDGES = [
+  ["units-vectors", "motion-1d"], ["motion-1d", "kinematics"], ["kinematics", "newtons-laws"], ["newtons-laws", "applying-newton"],
+  ["applying-newton", "work-energy"], ["applying-newton", "momentum"], ["applying-newton", "rotation"],
+  ["work-energy", "energy-conservation"], ["rotation", "rotational-dynamics"], ["rotational-dynamics", "equilibrium"],
+  ["energy-conservation", "periodic-motion"], ["rotational-dynamics", "periodic-motion"],
+];
+function courseMap() {
+  const spec = {
+    layout: "free",
+    alt: "Course map: units, 1D and 2D motion lead to Newton's laws, which branch into energy, momentum, and rotation; energy and rotation meet again in periodic motion.",
+    nodes: MAP.filter(([id]) => getTopic(id)).map(([id, label, at]) => ({ id, label, meta: String(moduleNumber(getTopic(id))), at })),
+    edges: MAP_EDGES.map(([from, to]) => ({ from, to, curve: "elbow" })),
+    motion: { cycle: 4 },
+  };
+  return `<div class="dg course-map" data-diagram-links="#/topics/"><script type="application/json">${JSON.stringify(spec).replace(/</g, "\\u003c")}</script></div>`;
+}
+
+const lessonMeta = (l) =>
+  `<span class="meta-item">${icon("clock")} ${l.minutes} min</span>${l.interactives.length ? `<span class="meta-item">${icon("flask")} ${l.interactives.length} interactive</span>` : ""}`;
+
 // ---------------- Home (landing page) ----------------
 export function home() {
   const interactives = topics.reduce((n, t) => n + (t.lessons ? t.lessons.reduce((m, l) => m + l.interactives.length, 0) : 0), 0) + sims.length;
-  const steps = [
-    ["📖", "Learn the concept", "Each module opens with a short explanation of the big idea and the key equations you'll use in PHYS 206."],
-    ["🎛️", "See it in an interactive model", "Drag vectors, move sliders, and rotate 3D models. Watch the physics respond and check the formula from lecture."],
-    ["🪜", "Work a problem step by step", "Try each step of an original practice problem (setup, diagram, equations, solution) before you reveal it."],
-    ["✅", "Check yourself", "Review the common mistakes and equation summary before homework or an exam."],
-  ];
+  const lessons = topics.reduce((n, t) => n + (t.lessons?.length || 0), 0);
   return {
     html: `
       <section class="hero">
+        <div class="hero-ground" data-fx="contour-lines" data-fx-seed="206" data-fx-params='{"calmX":0.26,"calmY":0.45,"calm":1,"opacity":0.24,"edge":0.6,"speed":0.015}' aria-hidden="true"></div>
         <div>
           <div class="eyebrow">A learning platform for PHYS 206</div>
           <h1>Learn Newtonian mechanics by seeing it move.</h1>
-          <p class="lead">LearnPHYS206 is a free study companion for Texas A&amp;M's PHYS 206. It has guided modules, interactive simulations, and step-by-step practice problems, in the same order as the course.</p>
+          <p class="lead">LearnPHYS206 is a free study companion for Texas A&amp;M's PHYS 206. It has guided lessons, interactive models, and practice problems, in the same order as the course.</p>
           <div class="btn-row">
-            <a class="btn btn-primary btn-lg" href="#/learn">Get started →</a>
+            <a class="btn btn-primary btn-lg" href="#/learn">Get started ${icon("arrow")}</a>
             <a class="btn btn-ghost btn-lg" href="#how-it-works" data-scroll>How it works</a>
           </div>
-          <div class="stats">
-            <div><strong>${topics.length}</strong><span>modules</span></div>
-            <div><strong>${interactives}</strong><span>interactive models</span></div>
-            <div><strong>${walkthroughs.length}</strong><span>walkthroughs</span></div>
+          <div class="stats" data-moment="counter-rolls">
+            <div><strong data-count>${topics.length}</strong><span>modules</span></div>
+            <div><strong data-count>${interactives}</strong><span>interactive models</span></div>
+            <div><strong data-count>${lessons}</strong><span>lessons</span></div>
           </div>
         </div>
-        <div class="hero-visual"><canvas aria-label="Animated projectile demo"></canvas></div>
+        <div class="hero-visual"><canvas aria-label="Projectile demo: drag on the picture to set the launch angle"></canvas></div>
       </section>
 
       <section class="section" id="about-course">
-        <div class="split">
-          <div>
-            <div class="eyebrow">The course</div>
-            <h2>What is PHYS 206?</h2>
-            <p>PHYS 206 is Texas A&amp;M's calculus-based Newtonian mechanics course for engineering and science majors. It covers how things move and why: kinematics, forces, energy, momentum, rotation, gravitation, and oscillations.</p>
-            <p class="muted">Many students find it hard to picture what the equations mean. LearnPHYS206 lets you watch the physics happen.</p>
-          </div>
-          <div class="card">
-            <h3>The course, module by module</h3>
-            <ol class="course-path">
-              ${topics.map((t, i) => `<li><span class="num">${i + 1}</span>${t.icon} ${t.title}</li>`).join("")}
-            </ol>
-          </div>
-        </div>
-      </section>
-
-      <section class="section" id="how-it-works">
-        <div class="section-head">
-          <div><div class="eyebrow">How it works</div><h2>How to use this site with the course</h2></div>
-          <p>Every module follows the same four-step path.</p>
-        </div>
-        <ol class="how-steps">
-          ${steps.map(([icon, title, body], i) => `
-            <li class="card">
-              <div class="how-num">Step ${i + 1}</div>
-              <div class="icon">${icon}</div>
-              <h3>${title}</h3>
-              <p>${body}</p>
-            </li>`).join("")}
+        <div class="eyebrow">The course</div>
+        <h2>What is PHYS 206?</h2>
+        <p class="measure">PHYS 206 is Texas A&amp;M's calculus-based Newtonian mechanics course for engineering and science majors. It covers how things move and why: kinematics, forces, energy, momentum, rotation, gravitation, and oscillations. Many students find it hard to picture what the equations mean. LearnPHYS206 lets you watch the physics happen.</p>
+        <div class="course-map-panel">${courseMap()}</div>
+        <ol class="course-path course-path--alt" aria-label="All modules">
+          ${topics.map((t, i) => `<li><a href="#/topics/${t.id}"><span class="num">${i + 1}</span>${t.title}</a></li>`).join("")}
         </ol>
       </section>
 
+      <section class="section how" id="how-it-works" data-moment="pinned-chapters">
+        <div class="mo-pc__grid">
+          <div class="mo-pc__text">
+            <div>
+              <div class="eyebrow">How it works</div>
+              <h2>How to use this site with the course</h2>
+              <p class="muted">Every module follows the same four steps.</p>
+            </div>
+            <ol class="mo-pc__steps">
+              ${STEPS.map(([ic, title, body], i) => `
+                <li class="mo-pc__step">
+                  <h3><span class="step-ico">${icon(ic)}</span> ${title}</h3>
+                  <p>${body}</p>
+                  <figure class="mo-pc__visual mo-pc__visual--lit">${STEP_VISUALS[i]}</figure>
+                </li>`).join("")}
+            </ol>
+          </div>
+          <div class="mo-pc__visuals" aria-hidden="true"></div>
+        </div>
+      </section>
+
       <section class="section">
-        <div class="section-head"><div><div class="eyebrow">When to use it</div><h2>Fits into your week</h2></div></div>
-        <div class="grid grid-3">
-          <div class="card"><h3>Before lecture</h3><p>Skim the module's concept notes so the lecture is easier to follow.</p></div>
-          <div class="card"><h3>Before homework</h3><p>Work a walkthrough on the same topic to practice the method. Then do your homework on your own.</p></div>
-          <div class="card"><h3>Before exams</h3><p>Review key equations and common mistakes, and use the sims to check your intuition.</p></div>
+        <div class="week">
+          <div><h3>Before lecture</h3><p>Skim the module's overview so the lecture is easier to follow.</p></div>
+          <div><h3>Before homework</h3><p>Work the module's practice problems to learn the method. Then do your homework on your own.</p></div>
+          <div><h3>Before exams</h3><p>Review the key equations and common mistakes, and use the interactive models to check your intuition.</p></div>
         </div>
       </section>
 
@@ -99,15 +250,17 @@ export function home() {
 
       <section class="cta-band">
         <h2>Ready to start?</h2>
-        <p>Pick a module and begin with the first concept.</p>
-        <a class="btn btn-light btn-lg" href="#/learn">Get started →</a>
+        <p>Pick a module and begin with its overview.</p>
+        <a class="btn btn-light btn-lg" href="#/learn">Get started ${icon("arrow")}</a>
       </section>`,
     mount: (root) => {
       root.querySelector("[data-scroll]").addEventListener("click", (e) => {
         e.preventDefault(); // keep the hash route intact
-        root.querySelector("#how-it-works").scrollIntoView({ behavior: "smooth" });
+        scrollToEl(root.querySelector("#how-it-works"));
       });
-      return heroDemo(root.querySelector(".hero-visual canvas"));
+      const stopHero = heroDemo(root.querySelector(".hero-visual canvas"));
+      const stopMock = animateProjectileMock(root);
+      return () => { stopHero(); stopMock(); };
     },
   };
 }
@@ -128,8 +281,8 @@ function setDone(topicId, lessonId, on) {
 
 // Simulations and walkthroughs attached to a module.
 const extraItems = (t) => [
-  ...t.sims.map(getSim).filter(Boolean).map((s) => ({ title: `Simulation: ${s.title}`, href: `#/simulations/${s.id}`, meta: "🎛️ interactive", extra: true })),
-  ...walkthroughs.filter((w) => w.topic === t.id).map((w) => ({ title: `Walkthrough: ${w.title}`, href: `#/walkthroughs/${w.id}`, meta: `🪜 ${w.difficulty}`, extra: true })),
+  ...t.sims.map(getSim).filter(Boolean).map((s) => ({ title: `Simulation: ${s.title}`, href: `#/simulations/${s.id}`, meta: `<span class="meta-item">${icon("sliders")} interactive</span>`, extra: true })),
+  ...walkthroughs.filter((w) => w.topic === t.id).map((w) => ({ title: `Walkthrough: ${w.title}`, href: `#/walkthroughs/${w.id}`, meta: `<span class="meta-item">${w.difficulty}</span>`, extra: true })),
 ];
 
 // The rows shown when a module's dropdown is opened.
@@ -137,16 +290,11 @@ function moduleItems(t) {
   if (t.lessons) {
     const done = getDone(t.id);
     return [
-      ...t.lessons.map((l) => ({
-        title: l.title,
-        href: `#/topics/${t.id}/${l.id}`,
-        meta: `⏱ ${l.minutes} min${l.interactives.length ? ` · 🧪 ${l.interactives.length} interactive` : ""}`,
-        done: done.has(l.id),
-      })),
+      ...t.lessons.map((l) => ({ title: l.title, href: `#/topics/${t.id}/${l.id}`, meta: lessonMeta(l), done: done.has(l.id) })),
       ...extraItems(t),
     ];
   }
-  return [{ title: "Concept & key equations", href: `#/topics/${t.id}`, meta: `📖 ${t.subtopics.length} topics` }, ...extraItems(t)];
+  return [{ title: "Concept & key equations", href: `#/topics/${t.id}`, meta: `<span class="meta-item">${t.subtopics.length} topics</span>` }, ...extraItems(t)];
 }
 
 const countInteractives = (t) =>
@@ -160,18 +308,18 @@ function moduleDropdown(t, open) {
   return `
     <details class="module-dd" ${open ? "open" : ""}>
       <summary>
-        <span class="module-badge">${moduleNumber(t)}</span>
+        <span class="module-badge" aria-label="Module ${moduleNumber(t)}">${moduleNumber(t)}</span>
         <div class="dd-main">
-          <div class="module-num">Module ${moduleNumber(t)} · ${t.chapter}</div>
-          <h3>${t.icon} ${t.title}</h3>
+          <div class="module-num">${t.chapter}</div>
+          <h3>${t.title}</h3>
           <p>${t.summary}</p>
         </div>
         <div class="dd-meta">
           <span>${nLessons} ${t.lessons ? "lessons" : "parts"}</span>
-          <span>🧪 ${countInteractives(t)} interactive</span>
-          ${t.lessons ? `<span class="progress-pill"><span style="width:${(nDone / nLessons) * 100}%"></span></span><span class="muted">${nDone}/${nLessons} done</span>` : ""}
+          <span class="meta-item">${icon("flask")} ${countInteractives(t)} interactive</span>
+          ${t.lessons ? `<span class="progress-pill" role="img" aria-label="${nDone} of ${nLessons} lessons done"><span style="width:${(nDone / nLessons) * 100}%"></span></span><span>${nDone}/${nLessons} done</span>` : ""}
         </div>
-        <span class="dd-chev" aria-hidden="true">▾</span>
+        <span class="dd-chev">${icon("chevron")}</span>
       </summary>
       <div class="dd-body">
         <ol class="lesson-list">
@@ -183,7 +331,7 @@ function moduleDropdown(t, open) {
             </a></li>`).join("")}
         </ol>
         <div class="btn-row">
-          <a class="btn btn-primary" href="${first.href}">${t.lessons ? "Start lesson 1" : "Start module"} →</a>
+          <a class="btn btn-primary" href="${first.href}">${t.lessons ? "Start lesson 1" : "Start module"} ${icon("arrow")}</a>
           <a class="btn btn-ghost" href="#/topics/${t.id}">Module overview</a>
         </div>
       </div>
@@ -198,20 +346,12 @@ export function learn() {
     html: `
       <div class="eyebrow">PHYS 206 · Course modules</div>
       <h1>Choose a module</h1>
-      <p class="muted" style="max-width:62ch">The modules follow the order of PHYS 206. Open a module to see its lessons, interactive models, and practice. If you're new, start with Module 1.</p>
-      <div class="btn-row" style="margin:20px 0 16px">
+      <p class="muted measure">The modules follow the order of PHYS 206. Open a module to see its lessons, interactive models, and practice. If you're new, start with Module 1.</p>
+      <div class="btn-row toolbar">
         <button class="btn btn-ghost btn-sm" data-dd="open">Expand all</button>
         <button class="btn btn-ghost btn-sm" data-dd="close">Collapse all</button>
       </div>
-      <div class="module-list">${topics.map((t) => moduleDropdown(t, t === last)).join("")}</div>
-
-      <section class="section">
-        <div class="section-head"><div><h2>Practice tools</h2></div><p>Go straight to a simulation or practice problem.</p></div>
-        <div class="grid grid-2">
-          <a class="card tool-card" href="#/simulations"><span class="icon">🎛️</span><div><h3>Simulation library</h3><p>All simulations in one place.</p></div></a>
-          <a class="card tool-card" href="#/walkthroughs"><span class="icon">🪜</span><div><h3>Walkthrough library</h3><p>Original practice problems, filterable by module.</p></div></a>
-        </div>
-      </section>`,
+      <div class="module-list">${topics.map((t) => moduleDropdown(t, t === last)).join("")}</div>`,
     mount: (root) => {
       root.querySelectorAll("[data-dd]").forEach((b) =>
         b.addEventListener("click", () => root.querySelectorAll(".module-dd").forEach((d) => (d.open = b.dataset.dd === "open"))),
@@ -219,6 +359,20 @@ export function learn() {
     },
   };
 }
+
+// Header shared by module pages: number badge, chapter line, title.
+const moduleHeader = (t, n) => `
+  <div class="topic-header"><span class="module-badge">${n}</span><div>
+    <div class="eyebrow">Module ${n} · ${t.chapter} · PHYS 206</div>
+    <h1>${t.title}</h1>
+  </div></div>
+  <p class="lead muted">${t.summary}</p>`;
+
+const moduleNav = (prev, next, n) => `
+  <div class="module-nav">
+    ${prev ? `<a class="card" href="#/topics/${prev.id}"><span class="muted">← Previous</span><strong>Module ${n - 1}: ${prev.title}</strong></a>` : "<span></span>"}
+    ${next ? `<a class="card card-next" href="#/topics/${next.id}"><span class="muted">Next →</span><strong>Module ${n + 1}: ${next.title}</strong></a>` : ""}
+  </div>`;
 
 // ---------------- Lesson-based module overview (e.g. Unit 1) ----------------
 function lessonModule(t) {
@@ -228,28 +382,28 @@ function lessonModule(t) {
   return {
     html: `
       <div class="breadcrumb"><a href="#/learn">Modules</a> / Module ${n}</div>
-      <div class="topic-header"><span class="icon">${t.icon}</span><div>
-        <div class="eyebrow" style="margin:0">Module ${n} · ${t.chapter} · PHYS 206</div>
-        <h1 style="margin:0">${t.title}</h1>
-      </div></div>
-      <p class="lead muted" style="font-size:1.1rem">${t.summary}</p>
-      <div class="btn-row"><a class="btn btn-primary btn-lg" href="#/topics/${t.id}/${t.lessons[0].id}">Start lesson 1 →</a></div>
+      ${moduleHeader(t, n)}
+      <div class="module-progress">
+        <span class="progress-pill" role="img" aria-label="${t.lessons.filter((l) => done.has(l.id)).length} of ${t.lessons.length} lessons done"><span style="width:${(t.lessons.filter((l) => done.has(l.id)).length / t.lessons.length) * 100}%"></span></span>
+        <span class="muted small">${t.lessons.filter((l) => done.has(l.id)).length} of ${t.lessons.length} lessons done</span>
+      </div>
+      <div class="btn-row"><a class="btn btn-primary btn-lg" href="#/topics/${t.id}/${t.lessons[0].id}">Start lesson 1 ${icon("arrow")}</a></div>
 
       <section class="section">
         <h2>Lessons</h2>
         <ol class="lesson-cards">
           ${t.lessons.map((l, k) => `
             <li><a class="card" href="#/topics/${t.id}/${l.id}">
-              <div class="card-top"><span class="module-num">Lesson ${k + 1}${done.has(l.id) ? " · ✓ done" : ""}</span><span class="muted small">⏱ ${l.minutes} min</span></div>
+              <div class="card-top"><span class="module-num">Lesson ${k + 1}${done.has(l.id) ? " · ✓ done" : ""}</span><span class="muted small meta-item">${icon("clock")} ${l.minutes} min</span></div>
               <h3>${l.title}</h3>
-              ${l.interactives.length ? `<div class="chips">${l.interactives.map((x) => `<span class="chip chip-neutral">🧪 ${x}</span>`).join("")}</div>` : ""}
+              ${l.interactives.length ? `<div class="chips">${l.interactives.map((x) => `<span class="chip chip-neutral">${x}</span>`).join("")}</div>` : ""}
             </a></li>`).join("")}
         </ol>
       </section>
 
       <section class="section">
         <h2>Key equations</h2>
-        <div class="eq-list">${t.equations.map((e) => `<div class="eq">${e.eq}<small>${e.note}</small></div>`).join("")}</div>
+        <div class="eq-list">${t.equations.map(eqBox).join("")}</div>
       </section>
 
       ${extraItems(t).length ? `
@@ -261,10 +415,7 @@ function lessonModule(t) {
         </div>
       </section>` : ""}
 
-      <div class="module-nav">
-        ${prev ? `<a class="card" href="#/topics/${prev.id}"><span class="muted">← Previous</span><strong>Module ${n - 1}: ${prev.title}</strong></a>` : "<span></span>"}
-        ${next ? `<a class="card" href="#/topics/${next.id}" style="text-align:right"><span class="muted">Next →</span><strong>Module ${n + 1}: ${next.title}</strong></a>` : ""}
-      </div>`,
+      ${moduleNav(prev, next, n)}`,
     mount: () => { try { localStorage.setItem("lastModule", t.id); } catch {} },
   };
 }
@@ -288,7 +439,7 @@ export function lessonDetail(topicId, lessonId) {
           </ol>
         </aside>
         <article class="prose">
-          <div class="eyebrow">Lesson ${k + 1} of ${t.lessons.length} · ⏱ ${l.minutes} min</div>
+          <div class="eyebrow">Lesson ${k + 1} of ${t.lessons.length} · <span class="meta-item">${icon("clock")} ${l.minutes} min</span></div>
           <h1>${l.title}</h1>
           ${l.body}
           <div class="lesson-footer">
@@ -296,7 +447,7 @@ export function lessonDetail(topicId, lessonId) {
           </div>
           <div class="module-nav">
             ${prev ? `<a class="card" href="#/topics/${t.id}/${prev.id}"><span class="muted">← Previous lesson</span><strong>${prev.title}</strong></a>` : `<a class="card" href="#/topics/${t.id}"><span class="muted">← Back to</span><strong>Module ${n} overview</strong></a>`}
-            ${next ? `<a class="card" href="#/topics/${t.id}/${next.id}" style="text-align:right"><span class="muted">Next lesson →</span><strong>${next.title}</strong></a>` : `<a class="card" href="#/learn" style="text-align:right"><span class="muted">Module finished →</span><strong>Back to all modules</strong></a>`}
+            ${next ? `<a class="card card-next" href="#/topics/${t.id}/${next.id}"><span class="muted">Next lesson →</span><strong>${next.title}</strong></a>` : `<a class="card card-next" href="#/learn"><span class="muted">Module finished →</span><strong>Back to all modules</strong></a>`}
           </div>
         </article>
       </div>`,
@@ -317,7 +468,8 @@ export function lessonDetail(topicId, lessonId) {
   };
 }
 
-// A module page follows the same 4-step path described on the home page.
+// A module page without lessons yet: a simple four-part outline.
+// (Every current module has lessons, so this only shows for a newly added one.)
 export function topicDetail(id) {
   const t = getTopic(id);
   if (!t) return notFound();
@@ -326,133 +478,57 @@ export function topicDetail(id) {
   const prev = topics[n - 2], next = topics[n];
   const tSims = t.sims.map(getSim).filter(Boolean);
   const tWalks = walkthroughs.filter((w) => w.topic === t.id);
-  const path = [["learn", "📖", "Concept"], ["see", "🎛️", "Simulate"], ["practice", "🪜", "Practice"], ["check", "✅", "Check yourself"]];
   return {
     html: `
       <div class="breadcrumb"><a href="#/learn">Modules</a> / Module ${n}</div>
-      <div class="topic-header"><span class="icon">${t.icon}</span><div>
-        <div class="eyebrow" style="margin:0">Module ${n} · ${t.chapter} · PHYS 206</div>
-        <h1 style="margin:0">${t.title}</h1>
-      </div></div>
-      <p class="lead muted" style="font-size:1.1rem">${t.summary}</p>
+      ${moduleHeader(t, n)}
 
-      <nav class="lesson-path" aria-label="Module sections">
-        ${path.map(([key, icon, label], i) => `<button data-jump="${key}"><span class="num">${i + 1}</span>${icon} ${label}</button>`).join("")}
-      </nav>
-
-      <section class="section" id="sec-learn">
-        <div class="eyebrow">Step 1</div>
-        <h2>Learn the concept</h2>
-        <h3>Lessons in this module</h3>
+      <section class="section">
+        <h2>What this module covers</h2>
         <ul class="subtopics">${t.subtopics.map((s) => `<li>${s}</li>`).join("")}</ul>
-        <h3 style="margin-top:24px">Concept notes</h3>
-        ${placeholder("Write a short concept explanation", " Explain the big idea in your own words, with an everyday example. A tennis example works well here.")}
-        <h3 style="margin-top:24px">Key equations</h3>
+        ${placeholder("Write a short concept explanation", " Explain the big idea in your own words, with an everyday example.")}
+      </section>
+
+      <section class="section">
+        <h2>Key equations</h2>
         ${t.equations.length
-          ? `<div class="eq-list">${t.equations.map((e) => `<div class="eq">${e.eq}<small>${e.note}</small></div>`).join("")}</div>`
+          ? `<div class="eq-list">${t.equations.map(eqBox).join("")}</div>`
           : placeholder("Add key equations", ` Add them to the <code>equations</code> array for <code>${t.id}</code> in <code>js/content/topics.js</code>.`)}
       </section>
 
-      <section class="section" id="sec-see">
-        <div class="eyebrow">Step 2</div>
-        <h2>See it in a simulation</h2>
-        ${tSims.length ? `<div class="grid grid-2">${tSims.map(simCard).join("")}</div>`
-          : placeholder("No simulation yet", " Build one in <code>js/sims/</code> and add its id to this topic's <code>sims</code> list.")}
-      </section>
+      ${tSims.length || tWalks.length ? `
+      <section class="section">
+        <h2>Practice</h2>
+        <div class="grid grid-2">${tSims.map(simCard).join("")}${tWalks.map(walkCard).join("")}</div>
+      </section>` : placeholder("No practice yet", " Add a simulation in <code>js/sims/</code> or a walkthrough in <code>js/content/walkthroughs.js</code>.")}
 
-      <section class="section" id="sec-practice">
-        <div class="eyebrow">Step 3</div>
-        <h2>Work a problem step by step</h2>
-        ${tWalks.length ? `<div class="grid grid-2">${tWalks.map(walkCard).join("")}</div>`
-          : placeholder("No walkthroughs yet", " Copy the template at the bottom of <code>js/content/walkthroughs.js</code> and set <code>topic: \"" + t.id + "\"</code>.")}
-      </section>
-
-      <section class="section" id="sec-check">
-        <div class="eyebrow">Step 4</div>
-        <h2>Check yourself</h2>
-        <h3>Common mistakes</h3>
-        ${placeholder("List the mistakes students make most", " For example, sign errors, mixing up mass and weight, or forgetting that friction opposes motion.")}
-        <h3 style="margin-top:24px">Quick check</h3>
-        ${placeholder("Add 2–3 concept questions", " Short multiple-choice or one-line questions with hidden answers, so students can test themselves before moving on.")}
-      </section>
-
-      <div class="module-nav">
-        ${prev ? `<a class="card" href="#/topics/${prev.id}"><span class="muted">← Previous</span><strong>Module ${n - 1}: ${prev.title}</strong></a>` : "<span></span>"}
-        ${next ? `<a class="card" href="#/topics/${next.id}" style="text-align:right"><span class="muted">Next →</span><strong>Module ${n + 1}: ${next.title}</strong></a>` : ""}
-      </div>`,
-    mount: (root) => {
-      try { localStorage.setItem("lastModule", t.id); } catch {}
-      root.querySelectorAll("[data-jump]").forEach((b) =>
-        b.addEventListener("click", () =>
-          root.querySelector(`#sec-${b.dataset.jump}`).scrollIntoView({ behavior: "smooth", block: "start" }),
-        ),
-      );
-    },
+      ${moduleNav(prev, next, n)}`,
+    mount: () => { try { localStorage.setItem("lastModule", t.id); } catch {} },
   };
 }
 
-// ---------------- Simulations ----------------
-export function simsIndex() {
-  return {
-    html: `
-      <div class="eyebrow">Hands-on</div>
-      <h1>Simulations</h1>
-      <p class="muted">Change a variable and watch the result update.</p>
-      <div class="grid grid-2" style="margin-top:24px">${sims.map(simCard).join("")}</div>`,
-  };
-}
-
+// ---------------- Simulation page ----------------
 export function simDetail(id) {
   const s = getSim(id);
   if (!s) return notFound();
   const t = getTopic(s.topic);
   const related = walkthroughs.filter((w) => w.sim === s.id);
+  const prompts = placeholder("Add guided questions", " Write 3–4 prompts. For example: <em>Which angle gives the longest range? Does that change if the launch height isn't zero?</em>");
   return {
     html: `
-      <div class="breadcrumb"><a href="#/simulations">Simulations</a> / ${s.title}</div>
-      <h1>${s.icon} ${s.title}</h1>
+      <div class="breadcrumb"><a href="#/topics/${t.id}">${t.title}</a> / ${s.title}</div>
+      <h1>${s.title}</h1>
       <p class="muted">${s.summary} Module: <a href="#/topics/${t.id}">${t.title}</a>.</p>
-      <div id="sim-root" style="margin-top:20px"></div>
+      <div id="sim-root"></div>
 
-      <section class="section">
-        <h2>Try this</h2>
-        ${placeholder("Add guided questions", " Write 3–4 prompts. For example: <em>Which angle gives the longest range? Does that change if the launch height isn't zero?</em>")}
-      </section>
+      ${prompts ? `<section class="section"><h2>Try this</h2>${prompts}</section>` : ""}
 
       ${related.length ? `<section class="section"><h2>Related walkthroughs</h2><div class="grid grid-2">${related.map(walkCard).join("")}</div></section>` : ""}`,
     mount: (root) => s.mount(root.querySelector("#sim-root")),
   };
 }
 
-// ---------------- Walkthroughs ----------------
-export function walksIndex() {
-  const used = topics.filter((t) => walkthroughs.some((w) => w.topic === t.id));
-  return {
-    html: `
-      <div class="eyebrow">Practice</div>
-      <h1>Walkthroughs</h1>
-      <p class="muted">Original problems, broken into setup, diagram, equations, and solution. Try each step yourself before you open it.</p>
-      <div class="filters" style="margin-top:20px">
-        <button class="active" data-topic="">All</button>
-        ${used.map((t) => `<button data-topic="${t.id}">${t.title}</button>`).join("")}
-      </div>
-      <div class="grid grid-2" id="walk-list"></div>`,
-    mount: (root) => {
-      const list = root.querySelector("#walk-list");
-      const render = (topic) => {
-        list.innerHTML = walkthroughs.filter((w) => !topic || w.topic === topic).map(walkCard).join("");
-      };
-      root.querySelectorAll(".filters button").forEach((b) =>
-        b.addEventListener("click", () => {
-          root.querySelectorAll(".filters button").forEach((x) => x.classList.toggle("active", x === b));
-          render(b.dataset.topic);
-        }),
-      );
-      render("");
-    },
-  };
-}
-
+// ---------------- Walkthrough page ----------------
 export function walkDetail(id) {
   const w = getWalkthrough(id);
   if (!w) return notFound();
@@ -461,18 +537,18 @@ export function walkDetail(id) {
   const t = getTopic(w.topic);
   return {
     html: `
-      <div class="breadcrumb"><a href="#/walkthroughs">Walkthroughs</a> / ${w.title}</div>
+      <div class="breadcrumb"><a href="#/topics/${t.id}">${t.title}</a> / ${w.title}</div>
       <div class="eyebrow">${t.title} · ${w.difficulty}</div>
       <h1>${w.title}</h1>
       <div class="problem-statement">${w.statement}</div>
-      <div class="btn-row" style="margin-bottom:16px">
+      <div class="btn-row walk-actions">
         <button class="btn btn-ghost" id="expand">Show all steps</button>
-        ${w.sim ? `<a class="btn btn-ghost" href="#/simulations/${w.sim}">Open in simulation →</a>` : ""}
+        ${w.sim ? `<a class="btn btn-ghost" href="#/simulations/${w.sim}">Open in simulation ${icon("arrow")}</a>` : ""}
       </div>
       <div class="steps">
         ${w.steps.map((s) => `<details class="step"><summary>${s.title}</summary><div class="step-body">${s.body}</div></details>`).join("")}
       </div>
-      <div class="btn-row" style="justify-content:space-between;margin-top:32px">
+      <div class="btn-row walk-nav">
         ${prev ? `<a href="#/walkthroughs/${prev.id}">← ${prev.title}</a>` : "<span></span>"}
         ${next ? `<a href="#/walkthroughs/${next.id}">${next.title} →</a>` : ""}
       </div>`,
@@ -493,31 +569,37 @@ export function about() {
   return {
     html: `
       <div class="eyebrow">About</div>
-      <h1>Why this exists</h1>
-      <p class="lead muted" style="font-size:1.1rem;max-width:60ch">Many students learn mechanics by reading worked solutions. This site lets you change the variables yourself and see what happens.</p>
+      <h1>About LearnPHYS206</h1>
+      <p class="lead muted measure">LearnPHYS206 is a free study resource for students taking PHYS 206 (Newtonian Mechanics) at Texas A&amp;M. It follows the course from units and vectors to oscillations, with guided lessons, worked examples, practice problems, and interactive models that let you change a variable and watch the physics respond.</p>
 
       <section class="section">
-        <h2>Who built it</h2>
-        ${placeholder("Add your bio", " Who you are, why you're building this while taking PHYS 206, and a link to your other projects.")}
+        <h2>Why I built it</h2>
+        <p class="measure">I built this site as a physics student myself. Textbooks explain the equations, but it often takes seeing a projectile's path bend or a pendulum's period change to really understand them. My goal is to make each concept click, not just to give you answers.</p>
+        <p class="measure">New here? See <a href="#/" data-how>how to use the site with the course</a>.</p>
       </section>
 
-      <section class="section">
-        <h2>Ground rules</h2>
-        <div class="grid grid-2">
-          <div class="card"><h3>✅ What's here</h3><p>Original practice problems, concept explanations, and simulations written for this site.</p></div>
-          <div class="card"><h3>🚫 What's not here</h3><p>Solutions to current PHYS 206 homework, quizzes, or exams, or problems copied from textbooks. This follows the Aggie Honor Code.</p></div>
-        </div>
-      </section>
-
-      <section class="section">
-        <h2>Instructors &amp; TAs</h2>
-        ${placeholder("Add a note for instructors", " Ask for feedback and say how to reach you. Include a contact email or form link.")}
+      <section class="section notice">
+        <strong>A note on academic integrity.</strong> Every problem on this site is original. Nothing here is copied from course homework, quizzes, or exams, and nothing is meant to replace your instructor, textbook, or assigned work. Use it to learn the material, and follow the Aggie Honor Code in your coursework.
       </section>
 
       <section class="section">
         <h2>Feedback</h2>
-        ${placeholder("Add a feedback link", " The simplest option is a Google Form link. Ask students which topic or simulation they want next.")}
+        <p class="measure">Found a mistake or have an idea for a new model? I'd love to hear from you at <a href="mailto:daksheeth@tamu.edu"><strong>daksheeth@tamu.edu</strong></a>.</p>
+      </section>
+
+      <section class="section">
+        <p class="muted small measure">LearnPHYS206 is an independent student project and is not affiliated with or endorsed by Texas A&amp;M University or the Department of Physics &amp; Astronomy.</p>
+        <p class="byline"><strong>Daksheeth Rajapandian</strong><br><span class="muted">Physics (Business Track), Texas A&amp;M University</span></p>
       </section>`,
+    mount: (root) => {
+      // go to the home page, then scroll to its "How it works" section
+      root.querySelector("[data-how]").addEventListener("click", (e) => {
+        e.preventDefault();
+        // the router re-renders on hashchange; scroll once that has happened
+        addEventListener("hashchange", () => setTimeout(() => scrollToEl(document.getElementById("how-it-works"))), { once: true });
+        location.hash = "#/";
+      });
+    },
   };
 }
 

@@ -11,7 +11,7 @@ const num = (v, d = 0) => Number(v.toFixed(d)).toLocaleString(undefined, { maxim
 function playLoop(onFrame) {
   let raf = 0, last = 0;
   const tick = (now) => {
-    const dt = Math.min((now - last) / 1000, 0.05);
+    const dt = Math.max(0, Math.min((now - last) / 1000, 0.05));
     last = now;
     if (onFrame(dt) === false) return;
     raf = requestAnimationFrame(tick);
@@ -179,7 +179,7 @@ export function pushApart(el) {
     const pmax = Math.max(p.m2 * p.v2, 1);
     signedBars(ctx, c, { x: w * 0.15, y: h * 0.62, w: w * 0.7, h: h * 0.36 }, [[`p ${p.n1}`, p.m1 * v1, A_COL], [`p ${p.n2}`, p.m2 * p.v2, B_COL], ["total", 0, T_COL]], pmax);
     readout.innerHTML = `
-      <div class="conv-chain">0 = (${p.m2})(${fmt(p.v2, 1)}) + (${p.m1})v → v = <strong>${fmt(v1, 2)} m/s</strong></div>
+      <div class="conv-chain" data-lenis-prevent>0 = (${p.m2})(${fmt(p.v2, 1)}) + (${p.m1})v → v = <strong>${fmt(v1, 2)} m/s</strong></div>
       <p class="small" style="margin-top:8px">The ${p.n1} moves ${Math.abs(v1) < p.v2 ? "slower" : Math.abs(v1) > p.v2 ? "faster" : "just as fast"}, in the opposite direction. The momenta are ${num(Math.abs(p.m1 * v1), 1)} kg·m/s each way, so the total stays zero and the center of mass never moves.</p>`;
   }
   build();

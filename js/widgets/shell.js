@@ -1,10 +1,12 @@
+import { icon as svgIcon } from "../icons.js";
+
 // Common frame for an interactive widget: title bar, stage, controls, readout.
 // Layout options: tall/xtall make the canvas taller; wide puts a short, wide canvas above the controls.
 export function shell(el, { title, icon = "🧪", canvas = false, tall = false, xtall = false, wide = false }) {
   el.classList.add("widget");
   const stage = [tall && "tall", xtall && "xtall", wide && "wide"].filter(Boolean).join(" ");
   el.innerHTML = `
-    <div class="widget-head"><span>${icon}</span><strong>${title}</strong><span class="widget-tag">Interactive</span></div>
+    <div class="widget-head">${svgIcon("sliders", "widget-ico")}<strong>${title}</strong><span class="widget-tag">Interactive</span></div>
     <div class="widget-body ${canvas ? "has-canvas" : ""} ${wide ? "stacked" : ""}">
       ${canvas ? `<div class="widget-stage ${stage}"><canvas></canvas></div>` : ""}
       <div class="widget-side">

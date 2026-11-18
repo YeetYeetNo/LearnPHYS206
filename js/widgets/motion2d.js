@@ -12,7 +12,7 @@ const angleDeg = (x, y) => ((deg(Math.atan2(y, x)) % 360) + 360) % 360;
 function playLoop(onFrame) {
   let raf = 0, last = 0;
   const tick = (now) => {
-    const dt = Math.min((now - last) / 1000, 0.05);
+    const dt = Math.max(0, Math.min((now - last) / 1000, 0.05));
     last = now;
     if (onFrame(dt) === false) return;
     raf = requestAnimationFrame(tick);
@@ -483,7 +483,7 @@ export function trainFrames(el) {
     ctx.restore();
     const sgn = (v) => (v >= 0 ? "+" : "−") + fmt(Math.abs(v), 1).replace("−", "");
     readout.innerHTML = `
-      <div class="conv-chain">v(P/G) = v(P/T) + v(T/G) = (${sgn(vpt)}) + (${sgn(vtg)}) = <strong>${sgn(vpt + vtg)} m/s</strong></div>
+      <div class="conv-chain" data-lenis-prevent>v(P/G) = v(P/T) + v(T/G) = (${sgn(vpt)}) + (${sgn(vtg)}) = <strong>${sgn(vpt + vtg)} m/s</strong></div>
       <p class="small" style="margin-top:8px">The inner T's "cancel" to leave P/G. Seen from the passenger, the ground moves at v(G/T) = −v(T/G) = ${sgn(-vtg)} m/s.</p>`;
   }
   draw();

@@ -41,7 +41,7 @@ export const unit4Lessons = [
       <p>A force is a push or a pull, and it always comes from an <strong>interaction between two objects</strong>. If you can't name the object doing the pushing or pulling, there's no force.</p>
 
       <h2>Forces are vectors</h2>
-      <p>A force has a size and a direction, so everything from Unit 1 applies. The SI unit is the <strong>newton (N)</strong>, where \(1\ \text{N} = 1\ \text{kg·m/s}^2\). One newton is roughly the weight of a medium apple.</p>
+      <p>A force has a size and a direction, so everything from Unit 1 applies. The SI unit is the <strong>newton (N)</strong>, where \(1\ \text{N} = 1\ \text{kg}\cdot\text{m/s}^2\). One newton is roughly the weight of a medium apple.</p>
 
       <h2>The forces you'll see most</h2>
       <table class="table" style="max-width:none">

@@ -12,7 +12,7 @@ const fmtJ = (j) => (Math.abs(j) >= 10000 ? `${fmt(j / 1000, 1)} kJ` : `${fmt(j,
 function playLoop(onFrame) {
   let raf = 0, last = 0;
   const tick = (now) => {
-    const dt = Math.min((now - last) / 1000, 0.05);
+    const dt = Math.max(0, Math.min((now - last) / 1000, 0.05));
     last = now;
     if (onFrame(dt) === false) return;
     raf = requestAnimationFrame(tick);
@@ -261,7 +261,7 @@ export function workEnergyBars(el) {
     const max = Math.max(K1, K2, ...works.map((x) => Math.abs(x[1])), 1);
     energyBars(ctx, c, { x: w * 0.42, y: 8, w: w * 0.56, h: h - 16 }, [["K₁", K1, "#0e7490"], ...works.map(([n, val]) => [`W ${n.toLowerCase()}`, val]), ["K₂", K2, "#0e7490"]], max);
     readout.innerHTML = `
-      <div class="conv-chain">K₁ + ΣW = K₂: ${fmtJ(K1)} ${works.map(([, val]) => (val < 0 ? "− " : "+ ") + fmtJ(Math.abs(val))).join(" ")} = <strong>${fmtJ(K2)}</strong></div>
+      <div class="conv-chain" data-lenis-prevent>K₁ + ΣW = K₂: ${fmtJ(K1)} ${works.map(([, val]) => (val < 0 ? "− " : "+ ") + fmtJ(Math.abs(val))).join(" ")} = <strong>${fmtJ(K2)}</strong></div>
       <table class="mini-table" style="margin-top:8px">
         <tr><th>Speed now: v = √(2K₂/m)</th><td><strong>${fmt(v2, 2)} m/s</strong></td></tr>
         ${key === "brake" && K2 < 1 ? `<tr><th>Stopped after</th><td><strong>${fmt(s, 1)} m</strong></td></tr>` : ""}

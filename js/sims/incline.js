@@ -144,7 +144,7 @@ export function mount(container) {
   }
 
   function tick(now) {
-    const dt = Math.min((now - last) / 1000, 0.05);
+    const dt = Math.max(0, Math.min((now - last) / 1000, 0.05));
     last = now;
     const ph = physics();
     v += ph.a * dt;

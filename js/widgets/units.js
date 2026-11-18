@@ -70,7 +70,7 @@ export function unitConverter(el) {
     });
     const fromName = fmtUnit(cat, state.from), toName = fmtUnit(cat, state.to);
     readout.innerHTML = `
-      <div class="conv-chain">${sci(state.value)} ${fromName}${steps.length ? " × " + steps.join(" × ") : ""} = <strong>${sci(result)} ${toName}</strong></div>
+      <div class="conv-chain" data-lenis-prevent>${sci(state.value)} ${fromName}${steps.length ? " × " + steps.join(" × ") : ""} = <strong>${sci(result)} ${toName}</strong></div>
       ${cat.dims.some(([, e]) => Math.abs(e) > 1) ? `<p class="muted small">This unit has a power of ${Math.max(...cat.dims.map(([, e]) => Math.abs(e)))}, so the conversion factor gets the same power.</p>` : ""}`;
   }
   build();
@@ -225,7 +225,7 @@ export function sigfigCounter(el) {
     const shown = r.digits.map((c, k) => `<span class="sf ${r.marks[k]}">${c}</span>`).join("");
     const count = r.amb ? `${r.sig} to ${r.sig + r.amb} <span class="muted">(ambiguous)</span>` : r.sig;
     readout.innerHTML = `
-      <div class="sf-display">${shown}${r.sci ? `<span class="sf dot"> × 10${sup(r.exp.replace("−", "-"))}</span>` : ""}</div>
+      <div class="sf-display" data-lenis-prevent>${shown}${r.sci ? `<span class="sf dot"> × 10${sup(r.exp.replace("−", "-"))}</span>` : ""}</div>
       <div class="sf-count">Significant figures: <strong>${count}</strong></div>
       <div class="sf-legend"><span class="sf sig">5</span> significant <span class="sf lead">0</span> leading zero (never counts) ${r.amb ? '<span class="sf amb">0</span> trailing zero with no decimal point (unclear)' : ""}</div>
       ${r.amb ? `<p class="muted small">Write it in scientific notation to make it clear, e.g. ${r.digits.filter((c) => c !== ".").join("").replace(/^0+/, "").replace(/(\d)/, "$1.")} × 10ⁿ.</p>` : ""}`;
@@ -339,7 +339,7 @@ export function fermi(el) {
     const ticks = [];
     for (let e = lo; e <= hi; e++) ticks.push(`<span style="left:${((e - lo) / (hi - lo)) * 100}%">10${sup(e)}</span>`);
     readout.innerHTML = `
-      <div class="conv-chain">${bpm} × ${rounded ? "(5 × 10⁵)" : "525,600"} × ${years} ≈ <strong>${sci(total, 2)} beats</strong></div>
+      <div class="conv-chain" data-lenis-prevent>${bpm} × ${rounded ? "(5 × 10⁵)" : "525,600"} × ${years} ≈ <strong>${sci(total, 2)} beats</strong></div>
       <div class="logbar">
         <div class="logbar-track"><div class="logbar-band" style="left:${((Math.log10(3e9) - 1 - lo) / (hi - lo)) * 100}%;width:${(2 / (hi - lo)) * 100}%"></div>
         <div class="logbar-dot" style="left:${Math.max(0, Math.min(100, pos))}%"></div></div>

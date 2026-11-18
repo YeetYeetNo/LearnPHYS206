@@ -196,6 +196,7 @@ export const unit13Lessons = [
       <p>Since \(T = 2\pi\sqrt{m/k}\), timing an oscillation reveals the mass, even where nothing has weight. That's useful in orbit, where astronauts float and a bathroom scale reads zero.</p>
       $$m = \frac{kT^2}{4\pi^2}$$
       <p><strong>Example.</strong> A person attached to a spring with \(k = 600\) N/m oscillates with a 2.0 s period: \(m = (600)(2.0)^2/(4\pi^2) = 61\) kg.</p>
+      <p class="muted">Try it: set the astronaut's mass, then time three oscillations the way the crew would. The period alone gives back the mass, while the bathroom scale reads zero.</p>
       <div data-widget="space-scale"></div>
 
       <h2>Angular SHM</h2>
@@ -241,6 +242,7 @@ export const unit13Lessons = [
       <p><strong>Measuring g.</strong> A 0.50 m pendulum is timed at 1.42 s per swing cycle. Solving the period formula for \(g\):</p>
       $$g = \frac{4\pi^2 L}{T^2} = \frac{4\pi^2(0.50)}{(1.42)^2} = 9.8\ \text{m/s}^2$$
       <p>This is a classic lab experiment, and a reminder that a pendulum clock runs at a different rate at different elevations, where \(g\) is slightly different.</p>
+      <p class="muted">Run the lab yourself: pick a world (including two mystery planets), choose a length, and time five swings. The model computes g from your measurement.</p>
       <div data-widget="measure-g"></div>
 
       <h2>Pendulum vs. spring</h2>

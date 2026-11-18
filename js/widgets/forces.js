@@ -11,7 +11,7 @@ const angleDeg = (x, y) => ((deg(Math.atan2(y, x)) % 360) + 360) % 360;
 function playLoop(onFrame) {
   let raf = 0, last = 0;
   const tick = (now) => {
-    const dt = Math.min((now - last) / 1000, 0.05);
+    const dt = Math.max(0, Math.min((now - last) / 1000, 0.05));
     last = now;
     if (onFrame(dt) === false) return;
     raf = requestAnimationFrame(tick);

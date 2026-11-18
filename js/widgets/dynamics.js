@@ -11,7 +11,7 @@ const num = (v, d = 0) => Number(v.toFixed(d)).toLocaleString(undefined, { maxim
 function playLoop(onFrame) {
   let raf = 0, last = 0;
   const tick = (now) => {
-    const dt = Math.min((now - last) / 1000, 0.05);
+    const dt = Math.max(0, Math.min((now - last) / 1000, 0.05));
     last = now;
     if (onFrame(dt) === false) return;
     raf = requestAnimationFrame(tick);
@@ -356,7 +356,7 @@ export function torqueWork(el) {
       ctx.fillStyle = col; ctx.fillRect(bx, yy + 6, (val / Wmax) * bw, 16);
     });
     readout.innerHTML = `
-      <div class="conv-chain">τΔθ = ½Iω² → (${st.tau})(${fmt(th, 1)}) = ½(${st.I})ω² → ω = <strong>${fmt(wv, 1)} rad/s</strong></div>
+      <div class="conv-chain" data-lenis-prevent>τΔθ = ½Iω² → (${st.tau})(${fmt(th, 1)}) = ½(${st.I})ω² → ω = <strong>${fmt(wv, 1)} rad/s</strong></div>
       <p class="small muted" style="margin-top:8px">No time or α needed, just like the linear work-energy theorem.</p>`;
   }
   draw();

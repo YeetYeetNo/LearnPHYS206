@@ -53,7 +53,7 @@ export const unit1Lessons = [
         <div><span class="big">kg</span><strong>kilogram</strong><span>mass</span></div>
         <div><span class="big">s</span><strong>second</strong><span>time</span></div>
       </div>
-      <p>Everything else is a <em>derived unit</em> built from these. Speed is m/s, acceleration is m/s², and force (Chapter 4) is the newton, where \(1\ \text{N} = 1\ \text{kg·m/s}^2\).</p>
+      <p>Everything else is a <em>derived unit</em> built from these. Speed is m/s, acceleration is m/s², and force (Chapter 4) is the newton, where \(1\ \text{N} = 1\ \text{kg}\cdot\text{m/s}^2\).</p>
 
       <h2>Metric prefixes</h2>
       <table class="table">

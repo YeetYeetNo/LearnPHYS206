@@ -32,7 +32,7 @@ const motionState = (v, a) => {
 function playLoop(onFrame) {
   let raf = 0, last = 0, running = false;
   const tick = (now) => {
-    const dt = Math.min((now - last) / 1000, 0.05);
+    const dt = Math.max(0, Math.min((now - last) / 1000, 0.05));
     last = now;
     if (onFrame(dt) === false) { running = false; return; }
     raf = requestAnimationFrame(tick);

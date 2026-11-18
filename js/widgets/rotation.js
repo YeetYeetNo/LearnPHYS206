@@ -11,7 +11,7 @@ const num = (v, d = 0) => Number(v.toFixed(d)).toLocaleString(undefined, { maxim
 function playLoop(onFrame) {
   let raf = 0, last = 0;
   const tick = (now) => {
-    const dt = Math.min((now - last) / 1000, 0.05);
+    const dt = Math.max(0, Math.min((now - last) / 1000, 0.05));
     last = now;
     if (onFrame(dt) === false) return;
     raf = requestAnimationFrame(tick);
@@ -297,7 +297,7 @@ export function inertiaDumbbell(el) {
     });
     const xcm = (st.m2 * L) / (st.m1 + st.m2);
     readout.innerHTML = `
-      <div class="conv-chain">I = (${st.m1})(${fmt(r1, 2)})² + (${st.m2})(${fmt(r2, 2)})² = <strong>${fmt(I, 3)} kg·m²</strong></div>
+      <div class="conv-chain" data-lenis-prevent>I = (${st.m1})(${fmt(r1, 2)})² + (${st.m2})(${fmt(r2, 2)})² = <strong>${fmt(I, 3)} kg·m²</strong></div>
       <p class="small" style="margin-top:8px">${Math.abs(st.x - xcm) < 0.011 ? "The axis is at the center of mass: this is the smallest I possible for this rod." : `Center of mass is at ${fmt(xcm, 2)} m. Moving the axis there would lower I to ${fmt(st.m1 * xcm ** 2 + st.m2 * (L - xcm) ** 2, 3)} kg·m².`}</p>`;
   }
   draw();
@@ -419,7 +419,7 @@ export function pulleyDrop(el) {
     });
     const vEnd = v(st.h), vFree = Math.sqrt(2 * G * st.h);
     readout.innerHTML = `
-      <div class="conv-chain">mgh = ½mv² + ${st.shape === "none" ? "0" : st.shape === "disk" ? "¼Mv²" : "½Mv²"} → v = <strong>${fmt(vEnd, 2)} m/s</strong></div>
+      <div class="conv-chain" data-lenis-prevent>mgh = ½mv² + ${st.shape === "none" ? "0" : st.shape === "disk" ? "¼Mv²" : "½Mv²"} → v = <strong>${fmt(vEnd, 2)} m/s</strong></div>
       <table class="mini-table" style="margin-top:8px">
         <tr><th>Massless pulley would give √(2gh)</th><td>${fmt(vFree, 2)} m/s</td></tr>
         <tr><th>Pulley's share of the energy</th><td>${fmt((kOf() * st.M) / (st.m + kOf() * st.M) * 100, 0)}%</td></tr>

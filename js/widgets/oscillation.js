@@ -13,7 +13,7 @@ const GRAV = [["9.8", "Earth (g = 9.80 m/s²)"], ["1.62", "Moon (g = 1.62 m/s²)
 function playLoop(onFrame) {
   let raf = 0, last = 0, running = false;
   const tick = (now) => {
-    const dt = Math.min((now - last) / 1000, 0.05);
+    const dt = Math.max(0, Math.min((now - last) / 1000, 0.05));
     last = now;
     if (onFrame(dt) === false) { running = false; return; }
     raf = requestAnimationFrame(tick);
@@ -327,22 +327,89 @@ export function verticalSpring(el) {
 // Weighing an astronaut with a spring
 // =====================================================================
 export function spaceScale(el) {
-  const { controls, readout } = shell(el, { title: "Spring scale in orbit", icon: "🧑‍🚀" });
-  const st = { k: 600, T: 2.0 };
-  controls.append(
-    slider({ label: "Spring constant k", min: 100, max: 1500, step: 10, value: st.k, unit: "N/m", onInput: (v) => { st.k = v; render(); } }),
-    slider({ label: "Measured period T", min: 0.5, max: 4, step: 0.05, value: st.T, unit: "s", onInput: (v) => { st.T = v; render(); } }),
-  );
-  function render() {
-    const m = (st.k * st.T ** 2) / (4 * Math.PI ** 2);
-    readout.innerHTML = `
-      <div class="conv-chain">m = kT²/(4π²) = (${st.k})(${fmt(st.T, 2)})²/(4π²) = <strong>${fmt(m, 1)} kg</strong></div>
-      <table class="mini-table" style="margin-top:8px">
-        <tr><th>Bathroom scale in orbit</th><td>0 N (everything is in free fall)</td></tr>
-        <tr><th>Spring oscillation</th><td>Still works: T depends on mass, not on weight</td></tr>
-      </table>`;
+  const { canvas, controls, readout } = shell(el, { title: "Spring scale in orbit", canvas: true, wide: true });
+  const st = { mode: "practice", m: 61, k: 600, t: 0, timed: null, timing: false, cycles: 0, prevSin: 0 };
+  const om = () => Math.sqrt(st.k / st.m);
+  const N = 3;
+  const reset = () => { anim.stop(); st.t = 0; st.cycles = 0; st.prevSin = 0; st.timed = null; st.timing = false; };
+  const anim = playLoop((dt) => {
+    st.t += dt;
+    const s = Math.sin(om() * st.t);
+    if (st.prevSin < 0 && s >= 0) st.cycles++;
+    st.prevSin = s;
+    if (st.cycles >= N) {
+      // stop exactly where the swing started, like pressing the stopwatch
+      st.timed = st.t / N; st.t = N * TAU / om(); st.timing = false;
+      draw();
+      return false;
+    }
+    draw();
+  });
+  const mystery = () => 50 + Math.floor(Math.random() * 61); // 50 to 110 kg
+  const sm = slider({ label: "Astronaut's mass", min: 40, max: 120, step: 1, value: st.m, unit: "kg", onInput: (v) => { st.m = v; reset(); draw(); } });
+  const sk = slider({ label: "Spring constant k", min: 200, max: 1200, step: 10, value: st.k, unit: "N/m", onInput: (v) => { st.k = v; reset(); draw(); } });
+  const setMode = (mode) => {
+    st.mode = mode; modeSel.value = mode;
+    sm.hidden = mode === "mystery";
+    newBtn.hidden = mode !== "mystery";
+    if (mode === "mystery") st.m = mystery(); else st.m = Number(sm.querySelector("input").value);
+    reset(); draw();
+  };
+  const modeSel = select([["practice", "Practice: you choose the mass"], ["mystery", "Mystery astronaut: mass hidden"]], "practice", setMode);
+  const timeBtn = button(`Time ${N} oscillations`, () => { reset(); st.timing = true; anim.start(); }, "btn btn-primary btn-sm");
+  const newBtn = button("New mystery astronaut", () => { st.m = mystery(); reset(); draw(); });
+  const exBtn = button("Worked example (k = 600 N/m)", () => { setMode("practice"); sm.set(61); sk.set(600); });
+  newBtn.hidden = true;
+  controls.append(row(modeSel), sm, sk, row(timeBtn, newBtn, exBtn));
+  const { ctx, size, destroy } = setupCanvas(canvas, () => draw());
+
+  function astronaut(x, y, c) {
+    ctx.lineWidth = 2; ctx.strokeStyle = c.text; ctx.fillStyle = c.surface;
+    ctx.beginPath(); ctx.roundRect(x - 17, y - 14, 34, 38, 8); ctx.fill(); ctx.stroke();   // suit
+    ctx.beginPath(); ctx.arc(x, y - 30, 17, 0, TAU); ctx.fill(); ctx.stroke();              // helmet
+    ctx.fillStyle = c.accent; ctx.beginPath(); ctx.roundRect(x - 11, y - 37, 22, 12, 6); ctx.fill(); // visor
+    ctx.fillStyle = c.muted; ctx.fillRect(x - 8, y - 2, 16, 8);                              // chest pack
   }
-  render();
+
+  function draw() {
+    if (!size.w) return;
+    const c = themeColors(), { w, h } = size;
+    ctx.clearRect(0, 0, w, h);
+    const y = h * 0.5, left = 34, right = w * 0.64, A = 0.15;
+    const x = A * Math.cos(om() * st.t);
+    ctx.fillStyle = c.muted; ctx.fillRect(left - 10, y - 56, 10, 112); ctx.fillRect(right, y - 56, 10, 112);
+    const mid = (left + right) / 2, s = ((right - left) / 2 - 60) / A, bx = mid + x * s;
+    drawSpring(ctx, left, y + 4, bx - 17, y + 4, c.text, 9, 8);
+    drawSpring(ctx, bx + 17, y + 4, right, y + 4, c.text, 9, 8);
+    astronaut(bx, y, c);
+    ctx.fillStyle = c.muted; ctx.font = "13px Inter, sans-serif"; ctx.textAlign = "center";
+    ctx.fillText("astronaut held between two springs", mid, y + 78);
+    // the bathroom scale that reads zero
+    const sx = w * 0.83, sy = y;
+    ctx.fillStyle = c.surface; ctx.strokeStyle = c.text; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.roundRect(sx - 56, sy - 32, 112, 64, 10); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = c.text; ctx.font = "600 22px JetBrains Mono, monospace"; ctx.fillText("0.0 kg", sx, sy + 8);
+    ctx.fillStyle = c.muted; ctx.font = "13px Inter, sans-serif"; ctx.fillText("bathroom scale in orbit", sx, sy + 56);
+    // stopwatch
+    ctx.fillStyle = c.text; ctx.font = "600 16px JetBrains Mono, monospace";
+    ctx.fillText(st.timing ? `${fmt(st.t, 2)} s` : st.timed ? `${fmt(st.timed * N, 2)} s` : "0.00 s", mid, 30);
+    ctx.fillStyle = c.muted; ctx.font = "13px Inter, sans-serif";
+    ctx.fillText(st.timing ? `oscillation ${Math.min(st.cycles + 1, N)} of ${N}` : st.timed ? `${N} oscillations` : "stopwatch", mid, 48);
+
+    const mMeasured = st.timed ? (st.k * st.timed ** 2) / (4 * Math.PI ** 2) : null;
+    const reveal = st.mode === "mystery"
+      ? `<tr><th>Actual mass</th><td>${mMeasured ? `${st.m} kg (your measurement is off by ${fmt(Math.abs(mMeasured - st.m) / st.m * 100, 1)}%)` : "hidden until you measure"}</td></tr>`
+      : "";
+    readout.innerHTML = `
+      <table class="mini-table">
+        <tr><th>Period T (${N} oscillations ÷ ${N})</th><td>${st.timing ? "timing…" : st.timed ? `<strong>${fmt(st.timed, 2)} s</strong>` : `press “Time ${N} oscillations”`}</td></tr>
+        <tr><th>Mass from the period, m = kT²/(4π²)</th><td>${mMeasured ? `(${st.k})(${fmt(st.timed, 2)})²/(4π²) = <strong>${fmt(mMeasured, 1)} kg</strong>` : "—"}</td></tr>
+        ${reveal}
+      </table>
+      <p class="small note">The bathroom scale reads zero because everything is in free fall. The springs still push back, so the oscillation still works: a heavier astronaut swings more slowly.</p>`;
+  }
+  draw();
+  return () => { anim.stop(); destroy(); };
 }
 
 // =====================================================================
@@ -428,21 +495,49 @@ export function pendulumRace(el) {
 // Measuring g with a pendulum
 // =====================================================================
 export function measureG(el) {
-  const { controls, readout } = shell(el, { title: "Measure g", icon: "📏" });
-  const st = { L: 0.5, T: 1.42 };
+  const { canvas, controls, readout } = shell(el, { title: "Measure g", canvas: true, wide: true });
+  const PLANETS = [["9.8", "Earth"], ["1.62", "Moon"], ["3.71", "Mars"], ["24.8", "Jupiter"], ["6.4", "Mystery planet A"], ["14.2", "Mystery planet B"]];
+  const st = { L: 0.5, g: 9.8, name: "Earth", s: { th: rad(8), w: 0 }, t: 0, timing: false, cycles: 0, prevW: 0, timed: null };
+  const N = 5;
+  const reset = () => { st.s = { th: rad(8), w: 0 }; st.t = 0; st.cycles = 0; st.prevW = 0; st.timed = null; st.lastCount = 0; st.timing = false; };
+  const anim = playLoop((dt) => {
+    for (let i = 0; i < 8; i++) {
+      pendStep(st.s, st.g, st.L, dt / 8); st.t += dt / 8;
+      // a full cycle ends each time the bob turns around at the release side (w goes from + to −)
+      if (st.timing && st.prevW > 0 && st.s.w <= 0 && st.s.th > 0 && st.t - st.lastCount > 0.6 * TAU * Math.sqrt(st.L / st.g)) { st.cycles++; st.lastCount = st.t; if (st.cycles >= N) { st.timing = false; st.timed = st.t / N; } }
+      st.prevW = st.s.w;
+    }
+    draw();
+  });
   controls.append(
-    slider({ label: "Pendulum length L", min: 0.1, max: 2, step: 0.01, value: st.L, unit: "m", onInput: (v) => { st.L = v; render(); } }),
-    slider({ label: "Timed period T", min: 0.3, max: 6, step: 0.01, value: st.T, unit: "s", onInput: (v) => { st.T = v; render(); } }),
+    row(select(PLANETS, "9.8", (v) => { st.g = Number(v); st.name = PLANETS.find((p) => p[0] === v)[1]; anim.stop(); reset(); draw(); })),
+    slider({ label: "Pendulum length L", min: 0.1, max: 2, step: 0.05, value: st.L, unit: "m", onInput: (v) => { st.L = v; anim.stop(); reset(); draw(); } }),
+    row(button(`Time ${N} swings`, () => { reset(); st.timing = true; anim.start(); }, "btn btn-primary btn-sm")),
   );
-  const places = [["Earth", 9.8], ["the Moon", 1.62], ["Mars", 3.71], ["Jupiter", 24.8]];
-  function render() {
-    const g = (4 * Math.PI ** 2 * st.L) / st.T ** 2;
-    const near = places.reduce((b, p) => (Math.abs(Math.log(p[1] / g)) < Math.abs(Math.log(b[1] / g)) ? p : b));
+  const { ctx, size, destroy } = setupCanvas(canvas, () => draw());
+  function draw() {
+    if (!size.w) return;
+    const c = themeColors(), { w, h } = size;
+    ctx.clearRect(0, 0, w, h);
+    const px = w * 0.3, py = 16, Lpx = (st.L / 2) * (h - 50) + 10;
+    ctx.fillStyle = c.border; ctx.fillRect(px - 40, py - 6, 80, 6);
+    drawPendulum(ctx, c, px, py, Lpx, st.s.th, 10, C.bob, false);
+    ctx.fillStyle = c.text; ctx.font = "600 22px JetBrains Mono, monospace"; ctx.textAlign = "center";
+    ctx.fillText(`${fmt(st.t, 2)} s`, w * 0.72, h * 0.42);
+    ctx.fillStyle = c.muted; ctx.font = "13px Inter, sans-serif";
+    ctx.fillText(st.timing ? `swing ${Math.min(st.cycles + 1, N)} of ${N}` : st.timed ? "done" : "stopwatch", w * 0.72, h * 0.42 + 20);
+    const mystery = st.name.startsWith("Mystery");
+    const gm = st.timed ? (4 * Math.PI ** 2 * st.L) / st.timed ** 2 : null;
     readout.innerHTML = `
-      <div class="conv-chain">g = 4π²L/T² = 4π²(${fmt(st.L, 2)})/(${fmt(st.T, 2)})² = <strong>${fmt(g, 2)} m/s²</strong></div>
-      <p class="small" style="margin-top:8px">Closest match: <strong>${near[0]}</strong> (${near[1]} m/s²).</p>`;
+      <table class="mini-table">
+        <tr><th>Measured period T (${N} swings ÷ ${N})</th><td>${st.timed ? `<strong>${fmt(st.timed, 3)} s</strong>` : "—"}</td></tr>
+        <tr><th>g = 4π²L/T²</th><td>${gm ? `4π²(${fmt(st.L, 2)})/(${fmt(st.timed, 3)})² = <strong>${fmt(gm, 2)} m/s²</strong>` : "—"}</td></tr>
+        <tr><th>Actual g on ${st.name}</th><td>${st.timed ? `${st.g} m/s²` : mystery ? "hidden until you measure" : `${st.g} m/s²`}</td></tr>
+      </table>
+      <p class="small note">Pick a world, choose a length, and time ${N} swings, the way you would in lab. Longer strings and weaker gravity both mean slower swings. (The guide's example: L = 0.50 m on Earth gives T ≈ 1.42 s.)</p>`;
   }
-  render();
+  draw();
+  return () => { anim.stop(); destroy(); };
 }
 
 // =====================================================================

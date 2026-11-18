@@ -19,7 +19,7 @@ const sci = (v, d = 2) => {
 function playLoop(onFrame) {
   let raf = 0, last = 0;
   const tick = (now) => {
-    const dt = Math.min((now - last) / 1000, 0.05);
+    const dt = Math.max(0, Math.min((now - last) / 1000, 0.05));
     last = now;
     if (onFrame(dt) === false) return;
     raf = requestAnimationFrame(tick);
@@ -156,7 +156,7 @@ export function cgPlank(el) {
     drawArrow(ctx, X(xcg), y - 8, 0, 60, C.w, null);
     ctx.fillStyle = C.pivot; ctx.font = "600 11px Inter, sans-serif"; ctx.fillText(`cg = ${fmt(xcg, 2)} m`, X(xcg), y + 44);
     readout.innerHTML = `
-      <div class="conv-chain">x_cg = [(${st.M})(${fmt(st.L / 2, 2)}) + (${st.mb})(${fmt(st.xb, 2)})] / (${st.M} + ${st.mb}) = <strong>${fmt(xcg, 2)} m</strong></div>
+      <div class="conv-chain" data-lenis-prevent>x_cg = [(${st.M})(${fmt(st.L / 2, 2)}) + (${st.mb})(${fmt(st.xb, 2)})] / (${st.M} + ${st.mb}) = <strong>${fmt(xcg, 2)} m</strong></div>
       <p class="small" style="margin-top:8px">A single support at the orange triangle would balance the whole thing. The green arrow is the total weight acting there.</p>`;
   }
   build();

@@ -11,7 +11,7 @@ const J = (v) => (Math.abs(v) >= 10000 ? `${fmt(v / 1000, 1)} kJ` : `${fmt(v, Ma
 function playLoop(onFrame) {
   let raf = 0, last = 0;
   const tick = (now) => {
-    const dt = Math.min((now - last) / 1000, 0.05);
+    const dt = Math.max(0, Math.min((now - last) / 1000, 0.05));
     last = now;
     if (onFrame(dt) === false) return;
     raf = requestAnimationFrame(tick);
@@ -340,7 +340,7 @@ export function energyLedger(el) {
     energyBars(ctx, c, { x: w * 0.58, y: 6, w: w * 0.4, h: h - 10 }, [["K", K, E.K], ["U", r.U, E.Ug], ["Heat", ok ? heat : 0, E.heat]], r.U1);
     const vFree = Math.sqrt(2 * G * r.h);
     readout.innerHTML = ok ? `
-      <div class="conv-chain">K₁ + U₁ + W_other = K₂ + U₂: 0 + ${J(r.U1)} − ${J(heat)} = ${J(K)} + ${J(r.U)}</div>
+      <div class="conv-chain" data-lenis-prevent>K₁ + U₁ + W_other = K₂ + U₂: 0 + ${J(r.U1)} − ${J(heat)} = ${J(K)} + ${J(r.U)}</div>
       <table class="mini-table" style="margin-top:8px">
         <tr><th>Friction fₖ = μₖmg cos θ</th><td>${fmt(r.f, 2)} N</td></tr>
         <tr><th>W_other = −fₖs</th><td>${J(r.Wf)} (becomes heat)</td></tr>
@@ -368,7 +368,7 @@ export function frictionDetective(el) {
     const U1 = st.m * G * st.h, K2 = 0.5 * st.m * st.v ** 2, W = K2 - U1;
     const pct = (Math.abs(W) / U1) * 100;
     readout.innerHTML = `
-      <div class="conv-chain">0 + ${J(U1)} + W_other = ${J(K2)} + 0 → W_other = <strong>${J(W)}</strong></div>
+      <div class="conv-chain" data-lenis-prevent>0 + ${J(U1)} + W_other = ${J(K2)} + 0 → W_other = <strong>${J(W)}</strong></div>
       <div class="bars" style="margin-top:10px">
         <div class="bar-row"><span class="bar-label">Starting U = mgh</span><span class="bar"><span style="width:100%;background:${E.Ug}"></span></span><span class="bar-val">${J(U1)}</span></div>
         <div class="bar-row"><span class="bar-label">K at the bottom</span><span class="bar"><span style="width:${Math.min(100, (K2 / U1) * 100)}%;background:${E.K}"></span></span><span class="bar-val">${J(K2)}</span></div>

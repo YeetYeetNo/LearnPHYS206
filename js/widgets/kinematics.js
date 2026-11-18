@@ -144,7 +144,7 @@ export function braking(el) {
   );
   const { ctx, size, destroy } = setupCanvas(canvas, () => draw());
   function tick(now) {
-    const dt = Math.min((now - last) / 1000, 0.05); last = now;
+    const dt = Math.max(0, Math.min((now - last) / 1000, 0.05)); last = now;
     t += dt * 2; // run at double speed
     draw();
     if (t < v0 / dec) raf = requestAnimationFrame(tick);
@@ -223,7 +223,7 @@ export function freeFall(el) {
   );
   const { ctx, size, destroy } = setupCanvas(canvas, () => draw());
   function tick(now) {
-    const dt = Math.min((now - last) / 1000, 0.05); last = now;
+    const dt = Math.max(0, Math.min((now - last) / 1000, 0.05)); last = now;
     t = Math.min(tLand(), t + dt);
     draw();
     if (t < tLand()) raf = requestAnimationFrame(tick);

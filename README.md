@@ -1,6 +1,6 @@
 # LearnPHYS206
 
-Interactive simulations and step-by-step walkthroughs for Newtonian mechanics.
+Interactive lessons and models for Newtonian mechanics.
 It's a plain static site (HTML, CSS, and JavaScript modules) with **no build step and no dependencies**, so Vercel serves it as-is.
 
 ## Run it locally
@@ -33,6 +33,11 @@ index.html              page shell: header, nav, footer
 css/styles.css          all styling and theme tokens (light/dark)
 js/app.js               hash router, theme toggle, mobile nav
 js/pages.js             one function per page (landing, module navigation, module, sims, walkthroughs, about)
+                        (single sims and walkthroughs are reached from their module; there are no separate library pages)
+js/icons.js             the site's line icons (used instead of emoji in the interface)
+js/fx-bridge.js         mounts the animated background and scroll effects on each page (see below)
+assets/vendor/taste-skill/  effects copied unchanged from the taste-skill plugin (MIT): the contour-line
+                        background, the course-map diagram, the pinned "How it works" steps, and the rolling numbers
 js/hero.js              home page animation
 js/content/topics.js        ← ADD MODULES HERE (order = module number)
 js/content/unit1.js         ← Unit 1 lessons (format for any lesson-based module)
@@ -80,7 +85,19 @@ vercel.json             static hosting config
 | A lesson | the module's `lessons` array (see `js/content/unit1.js`) | Put an interactive model anywhere with `<div data-widget="name"></div>`. |
 | A walkthrough | `js/content/walkthroughs.js` | Copy the template. Problems must be original. |
 | A simulation | new `js/sims/<name>.js` and `js/sims/index.js` | Export `mount(container)` and return a cleanup function. Use `incline.js` as a model. |
-| Bio, feedback link, concept notes | `js/pages.js` | Look for the dashed "✏️" placeholder boxes. |
+| About page text, feedback link | `js/pages.js` | The `about()` function. |
+| Key equations for a module | `js/content/topics.js` | Written in LaTeX inside ``String.raw`...` ``. |
+
+Dashed "✏️" placeholder boxes mark content still to write. They only appear when you run the site locally (localhost), never on the live site.
 
 ## Ground rules
 Problems are original. Nothing comes from current PHYS 206 homework, quizzes, or exams, or from textbooks (Aggie Honor Code and copyright).
+
+## Animations
+- **Home hero:** an animated contour map (`data-fx="contour-lines"`), a WebGL background with a CSS fallback.
+- **Home stats:** the numbers roll once like an odometer (`data-moment="counter-rolls"`).
+- **How it works:** the section stays on screen while its four steps open one at a time (`data-moment="pinned-chapters"`). This happens on screens 1024px wide and 640px tall or larger; smaller screens show the steps as a plain list.
+- **Course map (home page):** how the modules connect, drawn by the taste-skill diagram builder, with light pulses along the lines. Edit the boxes and lines in `MAP` and `MAP_EDGES` in `js/pages.js` (positions are fractions of the box). Clicking a box opens its module; phones see the plain module list instead.
+- **Progress bars:** a CSS fill animation in `css/styles.css` (`.progress-pill`).
+
+All of them rest or show a still frame when the visitor's system asks for reduced motion.
